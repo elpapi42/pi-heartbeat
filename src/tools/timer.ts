@@ -11,25 +11,25 @@ export function registerTimerTool(pi: ExtensionAPI, manager: TimerManager): void
 		name: "timer",
 		label: "Timer",
 		description:
-			"Set a non-blocking timer. Returns immediately — you go idle and the user can chat. " +
-			"When the timer fires, you get woken up with the message. " +
-			"Use this instead of `sleep` when you need to wait for something " +
-			"(build completion, deployment, polling intervals, etc.). " +
-			"You can set multiple timers simultaneously.",
+			"Set a one-shot, non-blocking wake-up timer. The tool returns immediately so the current turn can finish and the user can keep chatting. " +
+			"When the timer expires, Pi sends the agent a visible custom message and requests a new turn with the supplied message as context. " +
+			"Use this when waiting for builds, tests, deployments, rate limits, external systems, user-requested reminders, or any delayed follow-up that should not block the session. " +
+			"Do not use shell sleep for passive waiting; set a timer, include exactly what to check next in the message, then finish the response. " +
+			"Multiple timers may run at once. Reusing the same id replaces the previous active timer with that id.",
 		parameters: Type.Object({
 			seconds: Type.Number({
-				description: "Delay in seconds before waking up",
+				description: "Delay in seconds before waking up. Use the shortest reasonable delay for the follow-up, not a polling loop inside the same turn.",
 				minimum: 1,
 				maximum: 3600,
 			}),
 			message: Type.String({
 				description:
-					"Context message delivered when timer fires. Include what you were waiting for " +
-					"and what to do next, e.g. 'Check if build #42 finished — run `gh run view 42`'",
+					"Context delivered when the timer fires. Include what was being waited on, what to check, and any command/URL/ID needed next; e.g. 'Check if GitHub Actions run 123 finished — run `gh run view 123` and report the result.'",
 			}),
 			id: Type.Optional(
 				Type.String({
-					description: "Optional timer ID for cancellation. Auto-generated if omitted.",
+					description:
+						"Optional stable timer ID for idempotency. If another active timer uses the same ID, it is replaced by the new timer. Auto-generated if omitted.",
 				}),
 			),
 		}),

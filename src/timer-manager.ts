@@ -1,42 +1,22 @@
 /**
- * TimerManager — Centralized timer/heartbeat state management.
+ * TimerManager — one-shot non-blocking timer state management.
  *
- * Handles one-shot timers and periodic heartbeats.
- * Fires messages via pi.sendMessage({ triggerTurn: true }) to wake the agent.
+ * Timers are in-memory for the current extension/session runtime. When a timer
+ * fires, it sends a custom message with triggerTurn so Pi can wake the agent.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
-export interface ActiveTimer {
-	id: string;
-	seconds: number;
-	message: string;
-	createdAt: string;
-}
-
-export interface HeartbeatState {
-	id: number;
-	intervalSeconds: number;
-	message: string;
-	tick: number;
-	createdAt: string;
-}
-
 export class TimerManager {
 	private timers = new Map<string, NodeJS.Timeout>();
 	private timerCounter = 0;
-	private heartbeatInterval: NodeJS.Timeout | undefined;
-	private heartbeatState: HeartbeatState | undefined;
-	private heartbeatIdCounter = 0;
 
 	constructor(private pi: ExtensionAPI) {}
-
-	// ── One-shot timers ─────────────────────────────────────────────
 
 	setTimer(seconds: number, message: string, id?: string): string {
 		const timerId = id ?? `timer-${++this.timerCounter}`;
 
-		// Cancel existing timer with same ID
+		// Reusing an ID makes timer calls idempotent: the newest timer wins.
 		this.cancelTimer(timerId);
 
 		const timeout = setTimeout(() => {
@@ -44,7 +24,7 @@ export class TimerManager {
 
 			this.pi.sendMessage(
 				{
-					customType: "heartbeat-timer",
+					customType: "timer-fired",
 					content: `⏰ Timer [${timerId}] fired (after ${seconds}s): ${message}`,
 					display: true,
 					details: {
@@ -63,7 +43,14 @@ export class TimerManager {
 		return timerId;
 	}
 
-	cancelTimer(id: string): boolean {
+	clearAll(): void {
+		for (const [, timeout] of this.timers) {
+			clearTimeout(timeout);
+		}
+		this.timers.clear();
+	}
+
+	private cancelTimer(id: string): boolean {
 		const timeout = this.timers.get(id);
 		if (timeout) {
 			clearTimeout(timeout);
@@ -71,79 +58,5 @@ export class TimerManager {
 			return true;
 		}
 		return false;
-	}
-
-	getActiveTimerIds(): string[] {
-		return [...this.timers.keys()];
-	}
-
-	// ── Heartbeat (periodic) ────────────────────────────────────────
-
-	startHeartbeat(intervalSeconds: number, message: string): HeartbeatState {
-		this.stopHeartbeat();
-
-		this.heartbeatIdCounter++;
-		const currentId = this.heartbeatIdCounter;
-
-		this.heartbeatState = {
-			id: currentId,
-			intervalSeconds,
-			message,
-			tick: 0,
-			createdAt: new Date().toISOString(),
-		};
-
-		const state = this.heartbeatState;
-
-		this.heartbeatInterval = setInterval(() => {
-			state.tick++;
-
-			this.pi.sendMessage(
-				{
-					customType: "heartbeat-ping",
-					content: `💓 Heartbeat #${currentId} tick ${state.tick} (every ${intervalSeconds}s): ${message}`,
-					display: true,
-					details: {
-						type: "heartbeat",
-						heartbeatId: currentId,
-						tick: state.tick,
-						intervalSeconds,
-						message,
-						firedAt: new Date().toISOString(),
-					},
-				},
-				{ triggerTurn: true },
-			);
-		}, intervalSeconds * 1000);
-
-		return { ...state };
-	}
-
-	stopHeartbeat(): HeartbeatState | undefined {
-		const state = this.heartbeatState;
-		if (this.heartbeatInterval) {
-			clearInterval(this.heartbeatInterval);
-			this.heartbeatInterval = undefined;
-			this.heartbeatState = undefined;
-		}
-		return state;
-	}
-
-	getHeartbeatState(): HeartbeatState | undefined {
-		return this.heartbeatState ? { ...this.heartbeatState } : undefined;
-	}
-
-	isHeartbeatActive(): boolean {
-		return this.heartbeatInterval !== undefined;
-	}
-
-	// ── Cleanup ─────────────────────────────────────────────────────
-
-	clearAll(): void {
-		for (const [, t] of this.timers) {
-			clearTimeout(t);
-		}
-		this.timers.clear();
-		this.stopHeartbeat();
 	}
 }
