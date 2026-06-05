@@ -37,15 +37,29 @@ Put any behavioral policy you want in your own system prompt. The extension only
 
 ## Install
 
+Install directly from the GitHub repo:
+
 ```bash
-pi install npm:@marcfargas/pi-heartbeat
+pi install git:github.com/elpapi42/pi-heartbeat
 ```
 
-Or add to your `settings.json`:
+Or pin a specific commit/ref:
+
+```bash
+pi install git:github.com/elpapi42/pi-heartbeat@8782806
+```
+
+For a project-local install instead of global user settings, add `-l`:
+
+```bash
+pi install -l git:github.com/elpapi42/pi-heartbeat
+```
+
+You can also add it to your `settings.json`:
 
 ```json
 {
-  "packages": ["npm:@marcfargas/pi-heartbeat"]
+  "packages": ["git:github.com/elpapi42/pi-heartbeat"]
 }
 ```
 
